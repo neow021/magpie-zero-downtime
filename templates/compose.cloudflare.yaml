@@ -1,0 +1,10 @@
+# Ingress overlay: a remotely managed Cloudflare tunnel (references/cloudflare.md).
+# Its ingress rules live at Cloudflare and point at http://edge:3430 and http://edge:3425.
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: magpie-cloudflared
+    restart: unless-stopped
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    command: ["tunnel", "--no-autoupdate", "run"]

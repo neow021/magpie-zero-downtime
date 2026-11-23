@@ -1,21 +1,25 @@
-# magpie (yetone/magpie) AI gateway, blue/green behind Caddy behind a remotely managed
-# Cloudflare tunnel.
+# magpie (yetone/magpie) AI gateway, blue/green behind Caddy.
 #
-#   tunnel ingress -> edge:3430 (web UI) / edge:3425 (gateway)
-#                  -> magpie-<primary>, with magpie-<standby> as a hot spare
+#   ingress (Cloudflare tunnel or Tailscale) -> edge:3430 (web UI) / edge:3425 (gateway)
+#                                            -> magpie-<primary>, magpie-<standby> as a hot spare
+#
+# This file holds magpie and Caddy. The ingress comes from one overlay, chosen in .env:
+#   COMPOSE_FILE=compose.yaml:compose.cloudflare.yaml   (public hostnames, Access login on the UI)
+#   COMPOSE_FILE=compose.yaml:compose.tailscale.yaml    (tailnet only, Tailscale container)
+#   COMPOSE_FILE=compose.yaml                            (tailnet only, the host's `tailscale serve`)
 #
 # Both colors share ./config (supported from magpie v0.1.4526, which takes a shared-config lock).
 # Update or restart without downtime: ./update.sh [--force]. A plain `docker compose up -d`
 # after an image change may recreate both colors at once (a gap of seconds, long streams cut).
-# Values come from .env (see .env.example); nothing secret belongs in this file.
+# Values come from .env (see env.example); nothing secret belongs in this file.
 
 x-magpie: &magpie
   image: ${MAGPIE_IMAGE:-ghcr.io/yetone/magpie:daily}
   restart: unless-stopped
   environment:
     MAGPIE_WEB_KEY: ${MAGPIE_WEB_KEY}           # stable UI key (16+ chars); keeps browsers signed in
-    MAGPIE_PUBLIC_URL: ${MAGPIE_PUBLIC_URL}     # external gateway base URL, e.g. https://magpie-api.example.com
-    MAGPIE_WEB_URL: ${MAGPIE_WEB_URL}           # external UI URL, e.g. https://magpie.example.com
+    MAGPIE_PUBLIC_URL: ${MAGPIE_PUBLIC_URL}     # external gateway base URL
+    MAGPIE_WEB_URL: ${MAGPIE_WEB_URL}           # external UI URL
     MAGPIE_NAME: ${MAGPIE_NAME:-magpie}
     MAGPIE_DRAIN: "${MAGPIE_DRAIN:-300}"        # on SIGTERM, requests and streams in flight may finish this long
     # Optional: the gateway key the page-chat plugin spends. Without it the plugin takes the first
@@ -39,19 +43,12 @@ services:
     image: caddy:2
     container_name: magpie-edge
     restart: unless-stopped
-    # Optional: let agents on this host call the gateway without leaving the machine.
-    # It still needs a gateway key. Remove these two lines to keep the tunnel the only way in.
+    # Loopback only: agents on this host call the gateway without leaving the machine (still with
+    # a gateway key), and the host's `tailscale serve` reaches both ports from here.
     ports:
-      - "127.0.0.1:${MAGPIE_LOCAL_PORT:-3425}:3425"
+      - "127.0.0.1:${MAGPIE_LOCAL_API_PORT:-3425}:3425"
+      - "127.0.0.1:${MAGPIE_LOCAL_UI_PORT:-3430}:3430"
     environment:
       MAGPIE_HEALTH_KEY: ${MAGPIE_HEALTH_KEY}   # read-only gateway key for Caddy's health checks
     volumes:
       - ./caddy:/etc/caddy:ro                   # mount the directory: update.sh rewrites Caddyfile in it
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: magpie-cloudflared
-    restart: unless-stopped
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
-    command: ["tunnel", "--no-autoupdate", "run"]

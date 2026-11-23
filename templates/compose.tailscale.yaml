@@ -1,0 +1,20 @@
+# Ingress overlay: a Tailscale node of its own (references/tailscale.md).
+# It joins the tailnet as ${TS_HOSTNAME} and serves, with a certificate Tailscale issues:
+#   https://<TS_HOSTNAME>.<tailnet>.ts.net        -> edge:3430 (web UI)
+#   https://<TS_HOSTNAME>.<tailnet>.ts.net:8443   -> edge:3425 (gateway)
+# Nothing is published on the internet. Needs MagicDNS and HTTPS certificates on in the tailnet.
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: magpie-tailscale
+    hostname: ${TS_HOSTNAME:-magpie}
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY}                 # used on first start only; the state volume keeps the login
+      TS_HOSTNAME: ${TS_HOSTNAME:-magpie}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"                      # no /dev/net/tun or extra capabilities needed
+    volumes:
+      - ./tailscale/state:/var/lib/tailscale
+      - ./tailscale/serve.json:/config/serve.json:ro

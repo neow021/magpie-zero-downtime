@@ -24,7 +24,8 @@ published loopback port is outside the container too.
 Two endpoints, choose by where the client runs:
 - On the same host: `http://127.0.0.1:3425/v1` (the optional loopback port on Caddy). No trip
   through Cloudflare.
-- Anywhere else: `https://magpie-api.example.com/v1`.
+- Anywhere else: `https://magpie-api.example.com/v1` (Cloudflare) or
+  `https://magpie.<tailnet>.ts.net:8443/v1` (Tailscale, from a device in the tailnet).
 
 magpie serves `/v1/chat/completions`, `/v1/responses` and the Anthropic `/v1/messages` shape.
 Model ids carry the provider: `codex/gpt-…`, `claude/claude-…`, `deepseek/deepseek-…`.
