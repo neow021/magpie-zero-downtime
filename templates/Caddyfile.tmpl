@@ -1,0 +1,38 @@
+# Caddy in front of blue/green. update.sh renders Caddyfile from this template: edit the template.
+# TLS is Cloudflare's; this is plain HTTP inside the compose network.
+# __PRIMARY__ takes every request while healthy (lb_policy first); __STANDBY__ is the hot spare.
+{
+	auto_https off
+	admin localhost:2019
+}
+
+(app_lb) {
+	lb_policy first
+	lb_try_duration 30s
+	lb_try_interval 250ms
+	# Readiness = the gateway answering GET / with a read-only key: 200 while serving,
+	# 503 once a stop begins (drain), refused once it stops accepting. Probing the API port
+	# with a key avoids a 401 and a log line per check.
+	health_uri /
+	health_port 3425
+	health_headers {
+		Authorization "Bearer {$MAGPIE_HEALTH_KEY}"
+	}
+	health_status 2xx
+	health_interval 2s
+	health_timeout 2s
+	fail_duration 5s
+	flush_interval -1
+}
+
+:3430 {
+	reverse_proxy magpie-__PRIMARY__:3430 magpie-__STANDBY__:3430 {
+		import app_lb
+	}
+}
+
+:3425 {
+	reverse_proxy magpie-__PRIMARY__:3425 magpie-__STANDBY__:3425 {
+		import app_lb
+	}
+}
